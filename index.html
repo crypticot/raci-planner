@@ -52,7 +52,7 @@
   --shadow-3:0 16px 48px rgba(0,0,0,.4);
 }
 [data-theme="light"] {
-  --bg-page:#F4F4F0;
+  --bg-page:#F5F7EE;
   --surface-card:#FFFFFF;
   --surface-primary:#FFFFFF;
   --surface-secondary:#EFEFEA;
@@ -186,6 +186,11 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 [data-theme="light"] .task-table tbody tr:hover{background:rgba(0,0,0,0.02)}
 .drag-handle{cursor:grab;color:var(--text-tertiary);display:flex;align-items:center;padding:4px}
 .drag-handle:active{cursor:grabbing}
+.task-table th.sortable,.dash-table th.sortable{cursor:pointer;user-select:none}
+.task-table th.sortable:hover,.dash-table th.sortable:hover{color:var(--text-secondary)}
+.sort-mark{margin-left:4px;font-size:10px}
+.sort-rank{display:inline-block;background:var(--surface-tertiary);color:var(--text-secondary);border-radius:50%;width:14px;height:14px;font-size:9px;line-height:14px;text-align:center;margin-left:2px}
+.sort-icon{margin-left:4px;font-size:9px;opacity:.75}
 .task-name-cell{min-width:160px}
 .task-name-input{background:transparent;border:none;color:var(--text-primary);font-size:14px;font-family:'Outfit',sans-serif;width:100%;outline:none;padding:2px 0}
 .task-name-input:focus{border-bottom:1px solid var(--color-r)}
@@ -408,7 +413,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
     </button>
     <a class="cotworks-link" href="https://crypticot.github.io/cotworks-portfolio/" target="_blank" rel="noopener" style="margin-top:8px">
       <svg class="nav-icon" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
-      <span class="nav-label">COTworks</span>
+      <span class="nav-label">Created by COTworks</span>
     </a>
   </div>
 </aside>
@@ -442,11 +447,12 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 
     <!-- Member Database -->
     <div class="card mb-24">
-      <div class="flex items-center justify-between mb-16">
+      <div class="flex items-center justify-between mb-16" style="flex-wrap:wrap;gap:10px">
         <div class="card-title" style="margin-bottom:0">Team Members</div>
-        <div class="flex gap-8 items-center">
+        <div class="flex gap-8 items-center" style="flex-wrap:wrap">
+          <input type="text" id="memberSearch" class="form-input" style="width:160px;padding:6px 10px;font-size:12px" placeholder="Search members..." oninput="onMemberSearchInput()"/>
           <div class="sort-controls" style="margin-bottom:0">
-            <button type="button" class="sort-btn active" id="sortAZ" onclick="setSortMode('az')">A–Z</button>
+            <button type="button" class="sort-btn" id="sortName" onclick="cycleNameSort()" title="Sort by name">Name <span id="sortNameIcon" class="sort-icon">⇅</span></button>
             <button type="button" class="sort-btn" id="sortLoad" onclick="setSortMode('load')">Most Assigned</button>
           </div>
           <button type="button" class="btn btn-primary btn-sm" onclick="openMemberModal()">
@@ -461,8 +467,9 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 
     <!-- Tasks -->
     <div class="card">
-      <div class="flex items-center justify-between mb-16">
+      <div class="flex items-center justify-between mb-16" style="flex-wrap:wrap;gap:8px">
         <div class="card-title" style="margin-bottom:0">Tasks</div>
+        <span id="taskSortNotice" style="display:none;font-size:11px;color:var(--text-tertiary)">Sorted — <a href="#" onclick="clearTaskSort();return false;" style="color:var(--text-secondary);text-decoration:underline">clear sort</a> to drag-reorder</span>
         <button type="button" class="btn btn-primary btn-sm" onclick="addTask()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           Add Task
@@ -471,18 +478,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
       <div class="task-table-wrap">
         <table class="task-table" id="taskTable">
           <thead>
-            <tr>
-              <th style="width:40px"></th>
-              <th>Task</th>
-              <th style="width:50px">Total</th>
-              <th class="th-r" style="color:var(--color-r)">Responsible (R)</th>
-              <th class="th-a" style="color:var(--color-a)">Accountable (A)</th>
-              <th class="th-c" style="color:var(--color-c)">Consulted (C)</th>
-              <th class="th-i" style="color:var(--color-i)">Informed (I)</th>
-              <th>Status</th>
-              <th style="width:40px">Notes</th>
-              <th style="width:70px">Actions</th>
-            </tr>
+            <tr id="taskTableHeadRow"></tr>
           </thead>
           <tbody id="taskBody"></tbody>
         </table>
@@ -727,6 +723,18 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
   </div>
 </div>
 
+<!-- Delete Task Confirm -->
+<div class="modal-backdrop" id="deleteTaskModal">
+  <div class="modal-card" style="max-width:400px">
+    <h2 class="modal-title">Delete task?</h2>
+    <p class="modal-body" id="deleteTaskBody">This will remove the task and all its RACI assignments and notes. This cannot be undone.</p>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-secondary" onclick="closeDeleteTaskModal()">Cancel</button>
+      <button type="button" class="btn btn-danger" onclick="confirmDeleteTask()">Delete</button>
+    </div>
+  </div>
+</div>
+
 <!-- Reset Modal -->
 <div class="modal-backdrop" id="resetModal">
   <div class="modal-card" style="max-width:420px">
@@ -765,19 +773,25 @@ let state = {
   projectDesc: '',
   members: [],
   tasks: [],
-  filters: { memberId: null, role: null },
+  filters: { memberId: null, role: null, status: null },
   theme: localStorage.getItem('raci_theme') || 'dark',
   sidebarCollapsed: localStorage.getItem('raci_sidebar') === 'true'
 };
 
 let memberPage = 0;
 const MEMBERS_PER_PAGE = 8;
-let memberSort = 'az';
+let memberSort = 'none';
+let memberSearch = '';
 let editingMemberId = null;
 let deletingMemberId = null;
+let deletingTaskId = null;
+let taskSort = [];
+let dashSort = [];
 let currentView = 'planner';
 let raciChart = null;
 let sortable = null;
+
+const STATUS_RANK = { 'Not Started': 0, 'In Progress': 1, 'Blocked': 2, 'Done': 3 };
 
 // ─── AVATAR COLOURS ──────────────────────────────────────────────────
 const AVATAR_COLOURS = ['#4FC4CF','#7C6FF7','#F0A500','#A78BFA','#34D399','#F87171','#60A5FA','#FBBF24'];
@@ -808,7 +822,7 @@ function loadFromStorage() {
   try {
     const parsed = JSON.parse(saved);
     Object.assign(state, parsed);
-    state.filters = { memberId: null, role: null };
+    state.filters = { memberId: null, role: null, status: null };
     restoreInputs();
     renderMemberList();
     renderTaskTable();
@@ -893,18 +907,50 @@ function badgeClass(count) {
   return 'neutral';
 }
 
-// ─── MEMBER LIST ─────────────────────────────────────────────────────
 function getSortedMembers() {
-  const list = [...state.members];
+  let list = [...state.members];
+  const q = memberSearch.trim().toLowerCase();
+  if (q) {
+    list = list.filter(m =>
+      m.name.toLowerCase().includes(q) ||
+      (m.role || '').toLowerCase().includes(q) ||
+      (m.contact || '').toLowerCase().includes(q)
+    );
+  }
   if (memberSort === 'az') list.sort((a,b) => a.name.localeCompare(b.name));
-  else list.sort((a,b) => getMemberAssignmentCount(b.id) - getMemberAssignmentCount(a.id));
+  else if (memberSort === 'za') list.sort((a,b) => b.name.localeCompare(a.name));
+  else if (memberSort === 'load') list.sort((a,b) => getMemberAssignmentCount(b.id) - getMemberAssignmentCount(a.id));
   return list;
 }
 
 function setSortMode(mode) {
   memberSort = mode;
-  document.getElementById('sortAZ').classList.toggle('active', mode === 'az');
-  document.getElementById('sortLoad').classList.toggle('active', mode === 'load');
+  updateSortButtons();
+  memberPage = 0;
+  renderMemberList();
+}
+
+function cycleNameSort() {
+  if (memberSort === 'az') memberSort = 'za';
+  else if (memberSort === 'za') memberSort = 'none';
+  else memberSort = 'az';
+  updateSortButtons();
+  memberPage = 0;
+  renderMemberList();
+}
+
+function updateSortButtons() {
+  const nameBtn = document.getElementById('sortName');
+  const nameIcon = document.getElementById('sortNameIcon');
+  const loadBtn = document.getElementById('sortLoad');
+  const isName = memberSort === 'az' || memberSort === 'za';
+  nameBtn.classList.toggle('active', isName);
+  nameIcon.textContent = memberSort === 'az' ? '▲' : memberSort === 'za' ? '▼' : '⇅';
+  loadBtn.classList.toggle('active', memberSort === 'load');
+}
+
+function onMemberSearchInput() {
+  memberSearch = document.getElementById('memberSearch').value;
   memberPage = 0;
   renderMemberList();
 }
@@ -915,7 +961,8 @@ function renderMemberList() {
   const members = getSortedMembers();
 
   if (members.length === 0) {
-    container.innerHTML = `<div style="text-align:center;padding:32px;color:var(--text-tertiary);font-size:13px">No members yet. Add your first team member.</div>`;
+    const msg = state.members.length === 0 ? 'No members yet. Add your first team member.' : 'No members match your search.';
+    container.innerHTML = `<div style="text-align:center;padding:32px;color:var(--text-tertiary);font-size:13px">${msg}</div>`;
     pagEl.style.display = 'none';
     return;
   }
@@ -1044,15 +1091,93 @@ function addTask() {
 }
 
 function deleteTask(id) {
-  state.tasks = state.tasks.filter(t => t.id !== id);
+  deletingTaskId = id;
+  const t = state.tasks.find(x => x.id === id);
+  const body = document.getElementById('deleteTaskBody');
+  body.textContent = t ? `Delete "${t.name}"? This will remove its RACI assignments and notes. This cannot be undone.` : 'This will remove the task and all its RACI assignments and notes. This cannot be undone.';
+  document.getElementById('deleteTaskModal').classList.add('open');
+}
+function closeDeleteTaskModal() {
+  document.getElementById('deleteTaskModal').classList.remove('open');
+  deletingTaskId = null;
+}
+function confirmDeleteTask() {
+  if (!deletingTaskId) return;
+  state.tasks = state.tasks.filter(t => t.id !== deletingTaskId);
   persist();
+  closeDeleteTaskModal();
   renderTaskTable();
   renderMemberList();
+}
+
+const TASK_SORT_COLS = [
+  { key: 'name', label: 'Task' },
+  { key: 'total', label: 'Total' },
+  { key: 'status', label: 'Status' }
+];
+
+function taskSortMark(key, sortState) {
+  const idx = sortState.findIndex(s => s.key === key);
+  if (idx === -1) return '';
+  const arrow = sortState[idx].dir === 'asc' ? '▲' : '▼';
+  const rank = sortState.length > 1 ? `<span class="sort-rank">${idx+1}</span>` : '';
+  return `<span class="sort-mark">${arrow}${rank}</span>`;
+}
+
+function renderTaskTableHead() {
+  const tr = document.getElementById('taskTableHeadRow');
+  if (!tr) return;
+  tr.innerHTML = `
+    <th style="width:40px"></th>
+    <th class="sortable" onclick="sortTaskTable('name')">Task${taskSortMark('name', taskSort)}</th>
+    <th class="sortable" style="width:60px" onclick="sortTaskTable('total')">Total${taskSortMark('total', taskSort)}</th>
+    <th class="th-r" style="color:var(--color-r)">Responsible (R)</th>
+    <th class="th-a" style="color:var(--color-a)">Accountable (A)</th>
+    <th class="th-c" style="color:var(--color-c)">Consulted (C)</th>
+    <th class="th-i" style="color:var(--color-i)">Informed (I)</th>
+    <th class="sortable" onclick="sortTaskTable('status')">Status${taskSortMark('status', taskSort)}</th>
+    <th style="width:40px">Notes</th>
+    <th style="width:70px">Actions</th>
+  `;
+}
+
+function sortTaskTable(key) {
+  const idx = taskSort.findIndex(s => s.key === key);
+  if (idx === -1) taskSort.push({ key, dir: 'asc' });
+  else if (taskSort[idx].dir === 'asc') taskSort[idx].dir = 'desc';
+  else taskSort.splice(idx, 1);
+  renderTaskTable();
+}
+
+function clearTaskSort() {
+  taskSort = [];
+  renderTaskTable();
+}
+
+function getSortedTasks() {
+  if (taskSort.length === 0) return state.tasks;
+  const list = [...state.tasks];
+  list.sort((a, b) => {
+    for (const s of taskSort) {
+      let av, bv;
+      if (s.key === 'name') { av = a.name.toLowerCase(); bv = b.name.toLowerCase(); }
+      else if (s.key === 'total') {
+        av = ['r','a','c','i'].reduce((sum, r) => sum + a.raci[r].length, 0);
+        bv = ['r','a','c','i'].reduce((sum, r) => sum + b.raci[r].length, 0);
+      } else { av = STATUS_RANK[a.status] ?? 0; bv = STATUS_RANK[b.status] ?? 0; }
+      if (av < bv) return s.dir === 'asc' ? -1 : 1;
+      if (av > bv) return s.dir === 'asc' ? 1 : -1;
+    }
+    return 0;
+  });
+  return list;
 }
 
 function renderTaskTable() {
   const tbody = document.getElementById('taskBody');
   const empty = document.getElementById('taskEmpty');
+  renderTaskTableHead();
+  document.getElementById('taskSortNotice').style.display = taskSort.length ? 'inline' : 'none';
 
   if (state.tasks.length === 0) {
     tbody.innerHTML = '';
@@ -1062,11 +1187,17 @@ function renderTaskTable() {
   }
   empty.style.display = 'none';
 
-  tbody.innerHTML = state.tasks.map(t => buildTaskRow(t)).join('');
-  initSortable();
+  const displayTasks = getSortedTasks();
+  tbody.innerHTML = displayTasks.map(t => buildTaskRow(t)).join('');
+  if (taskSort.length === 0) {
+    initSortable();
+  } else if (sortable) {
+    sortable.destroy();
+    sortable = null;
+  }
 
   // Wire up RACI searches
-  state.tasks.forEach(t => {
+  displayTasks.forEach(t => {
     ['r','a','c','i'].forEach(role => {
       const input = document.getElementById(`search-${t.id}-${role}`);
       if (input) {
@@ -1256,6 +1387,30 @@ function initSortable() {
 }
 
 // ─── DASHBOARD ───────────────────────────────────────────────────────
+function sortDashTable(key) {
+  const idx = dashSort.findIndex(s => s.key === key);
+  if (idx === -1) dashSort.push({ key, dir: 'asc' });
+  else if (dashSort[idx].dir === 'asc') dashSort[idx].dir = 'desc';
+  else dashSort.splice(idx, 1);
+  renderDashboard();
+}
+
+function getSortedDashTasks(list) {
+  if (dashSort.length === 0) return list;
+  const arr = [...list];
+  arr.sort((a, b) => {
+    for (const s of dashSort) {
+      let av, bv;
+      if (s.key === 'name') { av = a.name.toLowerCase(); bv = b.name.toLowerCase(); }
+      else { av = STATUS_RANK[a.status] ?? 0; bv = STATUS_RANK[b.status] ?? 0; }
+      if (av < bv) return s.dir === 'asc' ? -1 : 1;
+      if (av > bv) return s.dir === 'asc' ? 1 : -1;
+    }
+    return 0;
+  });
+  return arr;
+}
+
 function renderDashboard() {
   const container = document.getElementById('dashboardContent');
   if (state.tasks.length === 0 || state.members.length === 0) {
@@ -1267,19 +1422,28 @@ function renderDashboard() {
     return;
   }
 
-  const { memberId, role } = state.filters;
+  const { memberId, role, status } = state.filters;
   let filteredTasks = [...state.tasks];
   if (memberId) filteredTasks = filteredTasks.filter(t => ['r','a','c','i'].some(r => t.raci[r].includes(memberId)));
   if (role) filteredTasks = filteredTasks.filter(t => t.raci[role] && t.raci[role].length > 0);
+  if (status) filteredTasks = filteredTasks.filter(t => t.status === status);
+
+  // Status filter row (always visible)
+  const statusOptions = ['Not Started','In Progress','Blocked','Done'];
+  const statusFilterHtml = `<div class="sort-controls mb-16">
+    <button type="button" class="sort-btn ${!status ? 'active' : ''}" onclick="setStatusFilter(null)">All</button>
+    ${statusOptions.map(s => `<button type="button" class="sort-btn ${status===s?'active':''}" onclick="setStatusFilter('${s}')">${s}</button>`).join('')}
+  </div>`;
 
   // Filter bar
   let filterBarHtml = '';
-  if (memberId || role) {
+  if (memberId || role || status) {
     const mName = memberId ? (state.members.find(m => m.id === memberId)||{}).name : null;
     filterBarHtml = `<div class="filter-bar">
       <span class="filter-label">Filtered by:</span>
       ${mName ? `<span class="filter-chip">${escHtml(mName)}<span class="filter-chip-remove" onclick="clearFilter('member')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span></span>` : ''}
       ${role ? `<span class="filter-chip" style="background:var(--color-${role}-surface);color:var(--color-${role});border-color:rgba(0,0,0,0.1)">Role: ${role.toUpperCase()}<span class="filter-chip-remove" onclick="clearFilter('role')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span></span>` : ''}
+      ${status ? `<span class="filter-chip">Status: ${escHtml(status)}<span class="filter-chip-remove" onclick="clearFilter('status')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span></span>` : ''}
       <button type="button" class="btn btn-sm btn-secondary" style="margin-left:auto" onclick="clearAllFilters()">Clear all</button>
     </div>`;
   }
@@ -1311,6 +1475,7 @@ function renderDashboard() {
   </div>`;
 
   // Matrix table
+  const sortedFilteredTasks = getSortedDashTasks(filteredTasks);
   const matrixHtml = `<div class="card mb-24">
     <div class="flex items-center justify-between mb-16" style="flex-wrap:wrap;gap:12px">
       <div class="card-title" style="margin-bottom:0">RACI Matrix</div>
@@ -1324,14 +1489,14 @@ function renderDashboard() {
     <div class="dash-table-wrap">
       <table class="dash-table">
         <thead><tr>
-          <th>Task</th>
+          <th class="sortable" onclick="sortDashTable('name')">Task${taskSortMark('name', dashSort)}</th>
           <th class="th-r">Responsible (R)</th>
           <th class="th-a">Accountable (A)</th>
           <th class="th-c">Consulted (C)</th>
           <th class="th-i">Informed (I)</th>
-          <th>Status</th>
+          <th class="sortable" onclick="sortDashTable('status')">Status${taskSortMark('status', dashSort)}</th>
         </tr></thead>
-        <tbody>${filteredTasks.map(t => {
+        <tbody>${sortedFilteredTasks.map(t => {
           const sc = statusToClass(t.status);
           return `<tr>
             <td style="font-family:'Plus Jakarta Sans',sans-serif;font-size:13px;font-weight:600">${escHtml(t.name)}</td>
@@ -1363,7 +1528,7 @@ function renderDashboard() {
     <div class="chart-wrap"><canvas id="raciChart"></canvas></div>
   </div>`;
 
-  container.innerHTML = filterBarHtml + kpiHtml + matrixHtml + chartHtml;
+  container.innerHTML = statusFilterHtml + filterBarHtml + kpiHtml + matrixHtml + chartHtml;
 
   // Build chart
   buildChart(filteredTasks);
@@ -1439,10 +1604,16 @@ function setMemberFilter(id) {
 function clearFilter(type) {
   if (type === 'member') state.filters.memberId = null;
   if (type === 'role') state.filters.role = null;
+  if (type === 'status') state.filters.status = null;
+  renderDashboard();
+}
+
+function setStatusFilter(status) {
+  state.filters.status = state.filters.status === status ? null : status;
   renderDashboard();
 }
 function clearAllFilters() {
-  state.filters = { memberId: null, role: null };
+  state.filters = { memberId: null, role: null, status: null };
   renderDashboard();
 }
 
@@ -1471,19 +1642,24 @@ function closeMemberInfoModal() { document.getElementById('memberInfoModal').cla
 
 // ─── EXPORTS ─────────────────────────────────────────────────────────
 function getExportRows() {
-  const { memberId, role } = state.filters;
+  const { memberId, role, status } = state.filters;
   let tasks = [...state.tasks];
   if (memberId) tasks = tasks.filter(t => ['r','a','c','i'].some(r => t.raci[r].includes(memberId)));
   if (role) tasks = tasks.filter(t => t.raci[role] && t.raci[role].length > 0);
+  if (status) tasks = tasks.filter(t => t.status === status);
   const memberName = id => { const m = state.members.find(x=>x.id===id); return m ? m.name : ''; };
   const rows = [
     [`Project: ${state.projectName || 'Untitled'}`],
     [`Description: ${state.projectDesc || ''}`],
     []
   ];
-  if (memberId || role) {
+  if (memberId || role || status) {
     const mName = memberId ? (state.members.find(m=>m.id===memberId)||{}).name : null;
-    rows.push([`Filter: ${mName ? 'Member: '+mName : ''}${mName && role ? ', ' : ''}${role ? 'Role: '+role.toUpperCase() : ''}`]);
+    const parts = [];
+    if (mName) parts.push('Member: '+mName);
+    if (role) parts.push('Role: '+role.toUpperCase());
+    if (status) parts.push('Status: '+status);
+    rows.push([`Filter: ${parts.join(', ')}`]);
     rows.push([]);
   }
   rows.push(['Task','Responsible','Accountable','Consulted','Informed','Status','Notes']);
@@ -1597,7 +1773,7 @@ function loadProjectJSON(input) {
     try {
       const parsed = JSON.parse(e.target.result);
       Object.assign(state, parsed);
-      state.filters = { memberId: null, role: null };
+      state.filters = { memberId: null, role: null, status: null };
       restoreInputs();
       renderMemberList();
       renderTaskTable();
@@ -1616,7 +1792,7 @@ function doReset() {
   state.projectDesc = '';
   state.members = [];
   state.tasks = [];
-  state.filters = { memberId: null, role: null };
+  state.filters = { memberId: null, role: null, status: null };
   localStorage.removeItem('raci_state');
   restoreInputs();
   renderMemberList();
@@ -1645,7 +1821,7 @@ function loadFlareTagExample() {
     { id:'t5', name:'Run beta with 10 communities',raci:{r:['m5'],a:['m1'],c:['m2'],  i:['m3','m4']}, status:'Not Started', notes:'' },
     { id:'t6', name:'Launch announcement',         raci:{r:['m4'],a:['m1'],c:['m3','m5'],i:['m2']}, status:'Not Started', notes:'' }
   ];
-  state.filters = { memberId: null, role: null };
+  state.filters = { memberId: null, role: null, status: null };
   persist();
   restoreInputs();
   renderMemberList();
